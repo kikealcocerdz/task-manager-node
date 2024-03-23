@@ -80,21 +80,31 @@ async function remove(taskId) {
       console.log('Tarea encontrada en el índice:', indexToRemove);
       currentTasks.tasks.splice(indexToRemove, 1);
 
-      // Enviar el JSON actualizado al servidor
-      const updateResponse = await fetch('http://localhost:3000/taskslist/update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(currentTasks)
-      });
+      // Aplicar la clase de CSS para el efecto de pantalla roja
+      document.body.classList.add('screen-flash');
 
-      if (updateResponse.ok) {
-        console.log('Tarea eliminada correctamente');
-        updateTaskList(); // Actualizar la lista de tareas después de eliminar la tarea
-      } else {
-        console.error('Error al eliminar la tarea:', updateResponse.statusText);
-      }
+      // Eliminar la tarea después de un breve retraso para permitir que el efecto se vea
+      setTimeout(async () => {
+        // Enviar el JSON actualizado al servidor
+        const updateResponse = await fetch('http://localhost:3000/taskslist/update', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(currentTasks)
+        });
+
+        if (updateResponse.ok) {
+          console.log('Tarea eliminada correctamente');
+          updateTaskList(); // Actualizar la lista de tareas después de eliminar la tarea
+        } else {
+          console.error('Error al eliminar la tarea:', updateResponse.statusText);
+        }
+
+        // Eliminar la clase de CSS después de que termine el efecto
+        document.body.classList.remove('screen-flash');
+      }, 500); // Ajusta el tiempo según sea necesario
+
     } else {
       console.error('No se encontró ninguna tarea con el ID especificado:', taskId);
     }
@@ -118,6 +128,9 @@ async function toggleDone(taskId) {
     if (taskToUpdate) {
       taskToUpdate.completed = true;
 
+      // Aplicar la clase de CSS para el efecto de pantalla roja
+      document.body.classList.add('screen-flash');
+
       // Enviar el JSON actualizado al servidor
       const updateResponse = await fetch('http://localhost:3000/taskslist/update', {
         method: 'POST',
@@ -133,13 +146,22 @@ async function toggleDone(taskId) {
       } else {
         console.error('Error al actualizar estado de la tarea:', updateResponse.statusText);
       }
+
+      // Eliminar la clase de CSS después de que termine el efecto
+      document.body.classList.remove('screen-flash');
+
+      // Obtener el elemento de la tarea completada y aplicar la clase `completed-task`
+      const completedTaskElement = document.getElementById(taskId);
+      if (completedTaskElement) {
+        completedTaskElement.classList.add('completed-task');
+      }
     } else {
+      console.error('No se encontró ninguna tarea con el ID especificado:', taskId);
     }
   } catch (error) {
     console.error('Error al actualizar estado de la tarea:', error);
   }
 }
-
 
 async function update() {
   try {
@@ -148,7 +170,23 @@ async function update() {
     if (response.ok) {
       const data = await response.json();
       const tasks = data.tasks; // Acceder al array de tareas dentro del objeto JSON
-      displayTasks(tasks);
+
+      // Vibrar el dispositivo
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200]); // Patrón de vibración: 200ms de vibración, 100ms de pausa, 200ms de vibración
+      }
+
+      loadTasks(tasks);
+
+      // Calcular el porcentaje de tareas completadas
+      const totalTasks = tasks.length;
+      const completedTasks = tasks.filter(task => task.completed).length;
+      const percentageCompleted = Math.round((completedTasks / totalTasks) * 100);
+
+      // Mostrar el porcentaje en algún elemento HTML
+      const percentageElement = document.getElementById('percentage');
+      percentageElement.textContent = `${percentageCompleted}% completado`;
+
     } else {
       console.error('Error al obtener las tareas respuesta ok:', response.statusText);
     }
@@ -156,6 +194,7 @@ async function update() {
     console.error('Error al obtener las tareas no encontradas:', error);
   }
 }
+
 let taskSelected = null;
 let startX = 0;
 let touchStartX = 0;
@@ -176,7 +215,6 @@ function dragStart(event, taskItem) {
 
   // Iniciar el temporizador al tocar la tarea
   touchTimer = setTimeout(() => {
-    // Llamar a toggleDone solo si el temporizador ha transcurrido más de 2 segundos
     toggleDone(taskSelectedId);
   }, 2000); // 2000 milisegundos = 2 segundos
 
@@ -220,24 +258,37 @@ function dragEnd(event) {
 }
 
 
-function displayTasks(tasks) {
+function loadTasks(tasks) {
   const taskListContainer = document.getElementById('task-list');
   // Limpiar el contenedor de tareas antes de volver a mostrarlas
   taskListContainer.innerHTML = '';
-  tasks.forEach(task => {
-    const taskItem = document.createElement('div');
-    taskItem.className = 'task-item';
-    taskItem.textContent = task.title;
-    taskItem.id = task.id;
 
-    // Verificar si la tarea está completada y aplicar el estilo correspondiente
-    if (task.completed) {
-      taskItem.classList.add('completed-task'); // Agregar una clase CSS para el estilo de tarea completada
-    }
+  // Filtrar las tareas completadas y las tareas no completadas
+  const completedTasks = tasks.filter(task => task.completed);
+  const incompleteTasks = tasks.filter(task => !task.completed);
 
+  // Mostrar primero las tareas no completadas
+  incompleteTasks.forEach(task => {
+    const taskItem = createTaskItem(task);
     taskListContainer.appendChild(taskItem);
     taskItem.addEventListener('touchstart', (event) => dragStart(event, taskItem));
   });
+
+  // Mostrar las tareas completadas después
+  completedTasks.forEach(task => {
+    const taskItem = createTaskItem(task);
+    taskItem.classList.add('completed-task'); // Agregar una clase CSS para el estilo de tarea completada
+    taskListContainer.appendChild(taskItem);
+    taskItem.addEventListener('touchstart', (event) => dragStart(event, taskItem));
+  });
+}
+
+function createTaskItem(task) {
+  const taskItem = document.createElement('div');
+  taskItem.className = 'task-item';
+  taskItem.textContent = task.title;
+  taskItem.id = task.id;
+  return taskItem;
 }
 
 
